@@ -1,0 +1,129 @@
+; SPDX-License-Identifier: GPL-2.0-only
+; Licensed under the GNU General Public License, version 2 only.
+; Provided without warranty. See LICENSE for the license text.
+
+;
+; ES8316.inf - Everest ES8316 audio codec driver (Rubik Pi 3 WoA port)
+;
+; Binds ACPI\ESSX8316 (\_SB.ES16 in the Rubik Pi 3 source DSDT):
+;   I2CSerialBusV2 0x11 on \_SB.I2C1, GpioIo 117 = codec supply enable,
+;   GpioInt 63 = optional jack detect. Polling is the default.
+;
+; The driver configures the codec as the I2S clock provider for PRIMARY MI2S and
+; tracks the 3.5 mm jack. Audio streaming is done by Qualcomm's Q6A miniport;
+; see README.md for the endpoint/graph side.
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System
+ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider    = %ProviderName%
+DriverVer   = 09/20/2026,1.0.8.0
+CatalogFile = ES8316.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+ES8316.sys = 1,,
+ES8316Prop.dll = 1,,
+
+[Manufacturer]
+%ManufacturerName% = Standard,NTARM64.10.0...16299
+
+[Standard.NTARM64.10.0...16299]
+%DeviceName% = ES8316_Device, ACPI\ESSX8316
+%DeviceName% = ES8316_Device, ACPI\VEN_ESSX&DEV_8316
+
+[ES8316_Device.NT]
+CopyFiles = Drivers_Dir, PropPage_Dir
+AddReg = ES8316_Device.AddReg
+
+[ES8316_Device.AddReg]
+
+HKR,,EnumPropPages32,,"%13%\ES8316Prop.dll,ES8316PropPageProvider"
+
+[PropPage_Dir]
+ES8316Prop.dll
+
+[Drivers_Dir]
+ES8316.sys
+
+[ES8316_Device.NT.HW]
+AddReg = ES8316_Device.HW.AddReg
+
+[ES8316_Device.HW.AddReg]
+
+HKR,,MclkHz,0x00010003,12288000
+
+HKR,,MclkId,0x00010003,0x300
+
+HKR,,MclkPolicy,0x00010003,1
+
+HKR,,I2sMaster,0x00010003,1
+
+HKR,,BclkDiv,0x00010003,0
+HKR,,SampleRate,0x00010003,48000
+
+HKR,,WordLength,0x00010003,16
+
+HKR,,MicInput,0x00010003,2
+
+HKR,,MicBoost,0x00010003,0
+
+HKR,,MicAlc,0x00010003,1
+
+HKR,,MicPgaGain,0x00010003,6
+
+HKR,,HpVolume,0x00010003,3
+HKR,,HpMixerGain,0x00010003,11
+
+HKR,,DacVolume,0x00010003,0
+HKR,,AdcVolume,0x00010003,0
+
+HKR,,JackDetectInverted,0x00010003,1
+
+HKR,,JackPollIntervalMs,0x00010003,1000
+HKR,,UseJackInterrupt,0x00010003,0
+
+HKR,,MuteWhenUnplugged,0x00010003,0
+
+HKR,,MicAlwaysOn,0x00010003,0
+
+HKR,,KeepPowerInD3,0x00010003,1
+
+HKR,,TraceLevel,0x00010003,4
+
+HKR,,HpEnableDelayMs,0x00010003,10
+HKR,,HpMuteDelayMs,0x00010003,10
+
+HKR,,DacRampRate,0x00010003,4
+
+[ES8316_Device.NT.Services]
+AddService = ES8316,%SPSVCINST_ASSOCSERVICE%, ES8316_Service_Inst
+
+[ES8316_Service_Inst]
+DisplayName    = %ServiceDesc%
+ServiceType    = 1
+StartType      = 3
+ErrorControl   = 1
+ServiceBinary  = %13%\ES8316.sys
+
+[ES8316_Device.NT.Wdf]
+KmdfService = ES8316, ES8316_wdfsect
+
+[ES8316_wdfsect]
+KmdfLibraryVersion = 1.15
+
+[Strings]
+SPSVCINST_ASSOCSERVICE = 0x00000002
+ProviderName     = "Rubik Pi 3 WoA Project"
+ManufacturerName = "Everest Semiconductor"
+DiskName         = "ES8316 Codec Driver Installation Disk"
+DeviceName       = "Everest ES8316 Audio Codec"
+ServiceDesc      = "Everest ES8316 Audio Codec Service"
