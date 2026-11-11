@@ -29,7 +29,41 @@ DEFINE_GUID(GUID_DEVINTERFACE_ES8316,
 #define IOCTL_ES8316_REINITIALIZE \
     CTL_CODE(FILE_DEVICE_UNKNOWN, ES8316_IOCTL_INDEX_BASE + 5, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
+#define IOCTL_ES8316_GET_PERSISTENT_STATUS \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, ES8316_IOCTL_INDEX_BASE + 6, METHOD_BUFFERED, FILE_READ_ACCESS)
+
 #pragma pack(push, 1)
+
+/* Separate ABI: the original codec status and controls remain unchanged. */
+typedef struct _ES8316_PERSISTENT_INFO
+{
+    ULONG Size;
+    ULONG Version;
+    ULONG State; /* 0 disabled, 1 idle, 2 starting, 3 running, 4 waiting,
+                    5 stopping, 6 exited */
+    ULONG Enabled;
+    ULONG Wanted;
+    ULONG RemovalBlocked;
+    ULONG LastStatus;
+    ULONG ReconnectCount;
+    ULONG BufferBytes;
+    ULONG SampleRate;
+    ULONGLONG ConsumedBytes;
+    ULONGLONG SubmittedBytes;
+    ULONGLONG ReturnedBytes;
+    ULONG Stage;
+    ULONG FailureStage;
+    ULONG LowerStatus;
+    ULONG PropertyId;
+    ULONG PropertyFlags;
+    ULONG InputBytes;
+    ULONG OutputBytes;
+    ULONG ListSize;
+    ULONG ListCount;
+    ULONG Reserved;
+} ES8316_PERSISTENT_INFO, *PES8316_PERSISTENT_INFO;
+
+#define ES8316_PERSISTENT_INFO_VERSION_1_SIZE ((ULONG)FIELD_OFFSET(ES8316_PERSISTENT_INFO, ReturnedBytes))
 
 typedef struct _ES8316_REGISTER_IO
 {

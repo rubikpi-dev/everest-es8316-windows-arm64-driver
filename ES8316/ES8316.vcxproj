@@ -48,6 +48,9 @@
     <TargetName>ES8316</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>ks.lib;ksguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
     <ClCompile>
       <WppEnabled>false</WppEnabled>
       <WarningLevel>Level4</WarningLevel>
@@ -63,6 +66,8 @@
     <ClInclude Include="Es8316Regs.h" />
     <ClInclude Include="Gpio.h" />
     <ClInclude Include="Mclk.h" />
+    <ClInclude Include="PersistentStream.h" />
+    <ClInclude Include="RingFeed.h" />
     <ClInclude Include="Spb.h" />
     <ClInclude Include="Trace.h" />
     <ClInclude Include="Tuning.h" />
@@ -73,10 +78,12 @@
     <ClCompile Include="Driver.c" />
     <ClCompile Include="Gpio.c" />
     <ClCompile Include="Mclk.c" />
+    <ClCompile Include="PersistentStream.c" />
     <ClCompile Include="Spb.c" />
   </ItemGroup>
   <ItemGroup>
     <Inf Include="ES8316.inf" />
+    <ResourceCompile Include="ES8316.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

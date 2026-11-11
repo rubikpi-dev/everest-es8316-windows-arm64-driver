@@ -19,7 +19,7 @@ Signature   = "$WINDOWS NT$"
 Class       = System
 ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318}
 Provider    = %ProviderName%
-DriverVer   = 09/20/2026,1.0.8.0
+DriverVer   = 11/11/2026,1.0.14.0
 CatalogFile = ES8316.cat
 PnpLockdown = 1
 
@@ -34,9 +34,9 @@ ES8316.sys = 1,,
 ES8316Prop.dll = 1,,
 
 [Manufacturer]
-%ManufacturerName% = Standard,NTARM64.10.0...16299
+%ManufacturerName% = Standard,NTARM64.10.0...19041
 
-[Standard.NTARM64.10.0...16299]
+[Standard.NTARM64.10.0...19041]
 %DeviceName% = ES8316_Device, ACPI\ESSX8316
 %DeviceName% = ES8316_Device, ACPI\VEN_ESSX&DEV_8316
 
@@ -56,6 +56,10 @@ ES8316.sys
 
 [ES8316_Device.NT.HW]
 AddReg = ES8316_Device.HW.AddReg
+DelReg = ES8316_PreviousExperiment.DelReg
+
+[ES8316_PreviousExperiment.DelReg]
+HKR,,StreamMuteEnabled
 
 [ES8316_Device.HW.AddReg]
 
@@ -98,6 +102,9 @@ HKR,,MicAlwaysOn,0x00010003,0
 HKR,,KeepPowerInD3,0x00010003,1
 
 HKR,,TraceLevel,0x00010003,4
+
+; Driver-owned silent playback on the ES8316 WaveSpeaker offload pin.
+HKR,,PersistentStreamEnabled,0x00010003,1
 
 HKR,,HpEnableDelayMs,0x00010003,10
 HKR,,HpMuteDelayMs,0x00010003,10

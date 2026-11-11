@@ -18,6 +18,7 @@
 #include "Es8316Regs.h"
 #include "Es8316Ioctl.h"
 #include "Mclk.h"
+#include "PersistentStream.h"
 #include "Device.h"
 #include "Codec.h"
 

@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,14,0
+ PRODUCTVERSION 1,0,14,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_DRV
+ FILESUBTYPE VFT2_DRV_SYSTEM
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Rubik Pi 3 WoA Project"
+            VALUE "FileDescription", "ES8316 codec and persistent playback driver"
+            VALUE "FileVersion", "1.0.14.0"
+            VALUE "InternalName", "ES8316"
+            VALUE "OriginalFilename", "ES8316.sys"
+            VALUE "ProductName", "Everest ES8316 Audio Codec"
+            VALUE "ProductVersion", "1.0.14.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

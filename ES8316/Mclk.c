@@ -502,6 +502,8 @@ Es8316MclkInitialize(
     status = WdfWaitLockCreate(&attributes, &m->Lock);
     if (!NT_SUCCESS(status))
     {
+        m->Lock = NULL;
+        m->LastStatus = status;
         return status;
     }
 
@@ -511,7 +513,8 @@ Es8316MclkInitialize(
     status = WdfWorkItemCreate(&workItemConfig, &attributes, &m->WorkItem);
     if (!NT_SUCCESS(status))
     {
-        return status;
+        m->WorkItem = NULL;
+        goto AllocationFailed;
     }
 
     WDF_TIMER_CONFIG_INIT(&timerConfig, Es8316MclkEvtRetryTimer);
@@ -522,7 +525,8 @@ Es8316MclkInitialize(
     status = WdfTimerCreate(&timerConfig, &attributes, &m->RetryTimer);
     if (!NT_SUCCESS(status))
     {
-        return status;
+        m->RetryTimer = NULL;
+        goto AllocationFailed;
     }
 
     if (DeviceGetContext(Device)->Config.MclkPolicy == Es8316MclkNever)
@@ -544,10 +548,24 @@ Es8316MclkInitialize(
     {
         Trace(TRACE_LEVEL_ERROR, TRACE_DRIVER, "mclk: IoRegisterPlugPlayNotification failed 0x%08lX", status);
         m->NotificationEntry = NULL;
+        m->LastStatus = status;
         return status;
     }
 
     return STATUS_SUCCESS;
+
+AllocationFailed:
+    /* No callbacks can run before notification registration. Leave Lock NULL
+       so D0 entry/exit cannot queue an incompletely initialized worker. */
+    if (m->WorkItem != NULL)
+    {
+        WdfObjectDelete(m->WorkItem);
+        m->WorkItem = NULL;
+    }
+    WdfObjectDelete(m->Lock);
+    m->Lock = NULL;
+    m->LastStatus = status;
+    return status;
 }
 
 VOID
@@ -614,16 +632,6 @@ Es8316MclkCleanup(
 
     Es8316MclkUnregisterNotification(Device);
 
-    if (m->RetryTimer != NULL)
-    {
-        WdfTimerStop(m->RetryTimer, TRUE);
-    }
-
-    if (m->WorkItem != NULL)
-    {
-        WdfWorkItemFlush(m->WorkItem);
-    }
-
     if (m->Lock != NULL)
     {
         WdfWaitLockAcquire(m->Lock, NULL);
@@ -645,5 +653,19 @@ Es8316MclkCleanup(
         }
         Es8316MclkDropInterface(m, TRUE);
         WdfWaitLockRelease(m->Lock);
+    }
+
+    /* Clear the desired state and drop the interface before draining work.
+       Otherwise a pending reconcile can rearm the timer after it was stopped
+       (including a failed release retry). With no vote/interface remaining,
+       neither queued work nor the final timer callback can schedule a retry. */
+    if (m->RetryTimer != NULL)
+    {
+        WdfTimerStop(m->RetryTimer, TRUE);
+    }
+
+    if (m->WorkItem != NULL)
+    {
+        WdfWorkItemFlush(m->WorkItem);
     }
 }

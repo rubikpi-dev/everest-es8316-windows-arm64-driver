@@ -91,6 +91,7 @@ Es8316ReadConfig(
     ES8316_REG_ULONG(Ctx, key, "MicAlwaysOn",         MicAlwaysOn,        0);
     ES8316_REG_ULONG(Ctx, key, "KeepPowerInD3",       KeepPowerInD3,      1);
     ES8316_REG_ULONG(Ctx, key, "TraceLevel",          TraceLevel,         TRACE_LEVEL_INFORMATION);
+    ES8316_REG_ULONG(Ctx, key, "PersistentStreamEnabled", PersistentStreamEnabled, 1);
 
 #define ES8316_WIDE_LITERAL_(text) L##text
 #define ES8316_WIDE_LITERAL(text) ES8316_WIDE_LITERAL_(text)
@@ -161,6 +162,9 @@ Es8316CreateDevice(
     pnpPowerCallbacks.EvtDeviceD0Entry = Es8316EvtD0Entry;
     pnpPowerCallbacks.EvtDeviceD0Exit = Es8316EvtD0Exit;
     pnpPowerCallbacks.EvtDeviceSelfManagedIoCleanup = Es8316EvtSelfManagedIoCleanup;
+    pnpPowerCallbacks.EvtDeviceSelfManagedIoInit = Es8316EvtSelfManagedIoInit;
+    pnpPowerCallbacks.EvtDeviceSelfManagedIoRestart = Es8316EvtSelfManagedIoRestart;
+    pnpPowerCallbacks.EvtDeviceSelfManagedIoSuspend = Es8316EvtSelfManagedIoSuspend;
     WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpPowerCallbacks);
 
     WdfDeviceInitSetIoType(DeviceInit, WdfDeviceIoBuffered);
@@ -238,6 +242,13 @@ Es8316CreateDevice(
     {
         Trace(TRACE_LEVEL_WARNING, TRACE_PNP, "MCLK control unavailable 0x%08lX", status);
         status = STATUS_SUCCESS;
+    }
+
+    ctx->PersistentInitStatus = Es8316PersistentInitialize(device, &ctx->Persistent);
+    if (!NT_SUCCESS(ctx->PersistentInitStatus))
+    {
+        Trace(TRACE_LEVEL_WARNING, TRACE_PNP,
+              "persistent stream unavailable 0x%08lX", ctx->PersistentInitStatus);
     }
 
     Trace(TRACE_LEVEL_INFORMATION, TRACE_PNP, "device created");
@@ -611,6 +622,42 @@ Es8316EvtIoDeviceControl(
         outLen = 0;
     }
 
+    if (IoControlCode == IOCTL_ES8316_GET_PERSISTENT_STATUS)
+    {
+        ES8316_PERSISTENT_STATUS snapshot;
+        size_t snapshotSize;
+        C_ASSERT(sizeof(ES8316_PERSISTENT_STATUS) == sizeof(ES8316_PERSISTENT_INFO));
+        C_ASSERT(FIELD_OFFSET(ES8316_PERSISTENT_STATUS, ConsumedBytes) ==
+                 FIELD_OFFSET(ES8316_PERSISTENT_INFO, ConsumedBytes));
+        C_ASSERT(FIELD_OFFSET(ES8316_PERSISTENT_STATUS, ReturnedBytes) ==
+                 FIELD_OFFSET(ES8316_PERSISTENT_INFO, ReturnedBytes));
+        if (outLen < ES8316_PERSISTENT_INFO_VERSION_1_SIZE)
+        {
+            WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
+            return;
+        }
+        RtlZeroMemory(&snapshot, sizeof(snapshot));
+        snapshotSize = outLen >= sizeof(ES8316_PERSISTENT_INFO) ?
+            sizeof(ES8316_PERSISTENT_INFO) : ES8316_PERSISTENT_INFO_VERSION_1_SIZE;
+        if (ctx->Persistent != NULL)
+        {
+            Es8316PersistentGetStatus(ctx->Persistent, &snapshot);
+        }
+        else
+        {
+            snapshot.Size = sizeof(snapshot);
+            snapshot.Version = 1;
+            snapshot.State = 4;
+            snapshot.Enabled = ctx->Config.PersistentStreamEnabled != 0;
+            snapshot.LastStatus = ctx->PersistentInitStatus;
+        }
+        snapshot.Size = (ULONG)snapshotSize;
+        snapshot.Version = snapshotSize == sizeof(ES8316_PERSISTENT_INFO) ? 2 : 1;
+        RtlCopyMemory(outBuf, &snapshot, snapshotSize);
+        WdfRequestCompleteWithInformation(Request, STATUS_SUCCESS, snapshotSize);
+        return;
+    }
+
     WdfWaitLockAcquire(ctx->CodecLock, NULL);
 
     if (!ctx->InD0)
@@ -772,12 +819,38 @@ done:
     WdfRequestCompleteWithInformation(Request, status, information);
 }
 
+NTSTATUS
+Es8316EvtSelfManagedIoInit(_In_ WDFDEVICE Device)
+{
+    Es8316PersistentResume(DeviceGetContext(Device)->Persistent);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS
+Es8316EvtSelfManagedIoRestart(_In_ WDFDEVICE Device)
+{
+    Es8316PersistentResume(DeviceGetContext(Device)->Persistent);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS
+Es8316EvtSelfManagedIoSuspend(_In_ WDFDEVICE Device)
+{
+    /* Drain our pin before D0Exit powers down the codec or releases MCLK.
+       Never hold CodecLock/Mclk.Lock while waiting for the KS owner thread. */
+    Es8316PersistentSuspend(DeviceGetContext(Device)->Persistent);
+    return STATUS_SUCCESS;
+}
+
 VOID
 Es8316EvtSelfManagedIoCleanup(
     _In_ WDFDEVICE Device
     )
 {
 
+    PDEVICE_CONTEXT ctx = DeviceGetContext(Device);
+    Es8316PersistentCleanup(ctx->Persistent);
+    ctx->Persistent = NULL;
     Es8316MclkCleanup(Device);
 }
 
@@ -787,5 +860,9 @@ Es8316EvtDeviceContextCleanup(
     )
 {
 
+    PDEVICE_CONTEXT ctx = DeviceGetContext((WDFDEVICE)Device);
+    /* Also cover a failed AddDevice before self-managed I/O was initialized. */
+    Es8316PersistentCleanup(ctx->Persistent);
+    ctx->Persistent = NULL;
     Es8316MclkUnregisterNotification((WDFDEVICE)Device);
 }
