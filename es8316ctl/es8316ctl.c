@@ -112,7 +112,7 @@ static const char *JackName(ULONG s)
 static int Usage(void)
 {
     fprintf(stderr,
-        "usage: es8316ctl status | dump | read <reg> | write <reg> <val> |\n"
+        "usage: es8316ctl status | persistent | dump | read <reg> | write <reg> <val> |\n"
         "       output <hp 0|1> <mic 0|1> [hpvol 0-3] [dacvol 0-192] | reinit\n");
     return 2;
 }
@@ -155,6 +155,52 @@ int __cdecl main(int argc, char **argv)
             }
         }
         else rc = 1;
+    }
+    else if (_stricmp(argv[1], "persistent") == 0)
+    {
+        ES8316_PERSISTENT_INFO st;
+        DWORD returned = 0;
+        static const char *states[] = {
+            "disabled", "idle", "starting", "running", "waiting", "stopping", "exited"
+        };
+        ZeroMemory(&st, sizeof(st));
+        if (!Ioctl(h, IOCTL_ES8316_GET_PERSISTENT_STATUS, NULL, 0, &st, sizeof(st), &returned))
+            rc = 1;
+        else if (!((st.Version == 1 && returned == ES8316_PERSISTENT_INFO_VERSION_1_SIZE) ||
+                   (st.Version == 2 && returned == sizeof(st))) || st.Size != returned)
+        {
+            fprintf(stderr, "unsupported persistent-stream status response\n");
+            rc = 1;
+        }
+        else
+        {
+            printf("persistent    : %s (state %lu), enabled %lu, wanted %lu\n",
+                   st.State < sizeof(states) / sizeof(states[0]) ? states[st.State] : "unknown",
+                   st.State, st.Enabled, st.Wanted);
+            printf("last status   : 0x%08lX; reconnects %lu; removal blocked %lu\n",
+                   st.LastStatus, st.ReconnectCount, st.RemovalBlocked);
+            printf("silent buffer : %lu bytes, %lu Hz\n", st.BufferBytes, st.SampleRate);
+            printf("stream bytes  : consumed %llu, submitted %llu\n",
+                   st.ConsumedBytes, st.SubmittedBytes);
+            if (st.Version >= 2)
+            {
+                static const char *stages[] = { "idle", "codec readiness", "find interface",
+                    "topology nodes", "engine descriptor", "pin dataflow", "pin communication",
+                    "pin instances", "pin modes", "create pin", "allocate buffer", "acquire",
+                    "pause", "preroll", "run", "read position", "write position" };
+                const size_t count = sizeof(stages) / sizeof(stages[0]);
+                printf("operation     : %s (%lu); last failure: %s (%lu)\n",
+                       st.Stage < count ? stages[st.Stage] : "unknown", st.Stage,
+                       st.FailureStage < count ? stages[st.FailureStage] : "unknown", st.FailureStage);
+                printf("KS response   : 0x%08lX; returned %llu / capacity %lu bytes\n",
+                       st.LowerStatus, st.ReturnedBytes, st.OutputBytes);
+                printf("KS request    : property %lu, flags 0x%08lX, input %lu bytes\n",
+                       st.PropertyId, st.PropertyFlags, st.InputBytes);
+                printf("KS list       : size %lu, count %lu\n", st.ListSize, st.ListCount);
+            }
+            else printf("KS diagnostics: unavailable on the older driver\n");
+            if (st.State != 3) rc = 3;
+        }
     }
     else if (_stricmp(argv[1], "dump") == 0)
     {
